@@ -1,0 +1,25 @@
+{
+  "name": "Cohésion Fraternelle JADP Groupe",
+  "short_name": "Cohésion",
+  "description": "Plateforme communautaire sociale et administrative.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080b11",
+  "theme_color": "#0b2f64",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo-cohesion.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-cohesion.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
