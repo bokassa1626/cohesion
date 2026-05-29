@@ -21,14 +21,14 @@ import {
   Sparkles,
   Lock,
   UserPlus,
-  Smartphone,
-  Laptop,
   Camera,
   CheckCircle,
   XCircle,
   Download,
   AlertTriangle,
   Heart,
+  Search,
+  Menu,
   Mic,
   PlusCircle,
   FolderOpen,
@@ -39,14 +39,9 @@ import {
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  Legend
+  ResponsiveContainer
 } from 'recharts';
 
 import {
@@ -60,19 +55,23 @@ import {
   SECURITY_LOGS
 } from './mockData';
 import { api, getAuthToken, setAuthToken } from './services/api';
+import heroImage from './assets/hero.png';
 
 export default function App() {
-  // --- Viewport & Theme States ---
-  const [viewportMode, setViewportMode] = useState(() => window.innerWidth <= 760 ? 'mobile' : 'desktop');
-  const [theme, setTheme] = useState('dark');
+  // --- UI & Theme States ---
+  const [theme, setTheme] = useState(() => {
+    const savedTheme = localStorage.getItem('cohesion_theme');
+    if (savedTheme) return savedTheme;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   // --- Auth & Security States ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [loginEmail, setLoginEmail] = useState('bokassantwali@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('20262026');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [mfaStep, setMfaStep] = useState('none'); // 'none' | 'otp'
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [otpInput, setOtpInput] = useState('');
@@ -104,13 +103,15 @@ export default function App() {
   // --- UI Interactive States ---
   const [searchQuery, setSearchQuery] = useState('');
   const [newPostText, setNewPostText] = useState('');
-  const [newPostCategory, setNewPostCategory] = useState('Annonce');
   const [selectedPostFile, setSelectedPostFile] = useState(null);
   const [newCommentTexts, setNewCommentTexts] = useState({}); // postId -> comment
   const [activeStory, setActiveStory] = useState(null);
   const [storyProgress, setStoryProgress] = useState(0);
   const [activeCall, setActiveCall] = useState(null); // { type: 'audio'|'video', memberName, avatar, status: 'ringing'|'connected', selfMuted: false }
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [aiMessages, setAiMessages] = useState([
     { sender: 'bot', text: "Bonjour ! Je suis l'Assistant intelligent de Cohésion Fraternelle. Vous pouvez me poser des questions sur notre communauté, nos valeurs, les cotisations, les événements, les rôles, les règles ou l'histoire du groupe." }
   ]);
@@ -183,12 +184,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const syncViewport = () => setViewportMode(window.innerWidth <= 760 ? 'mobile' : 'desktop');
-    window.addEventListener('resize', syncViewport);
-    return () => window.removeEventListener('resize', syncViewport);
-  }, []);
-
-  useEffect(() => {
     const handleBeforeInstall = (event) => {
       event.preventDefault();
       setInstallPrompt(event);
@@ -197,6 +192,27 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('cohesion_theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const handleGlobalShortcuts = (event) => {
+      const isSearchShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+      if (isSearchShortcut && isAuthenticated) {
+        event.preventDefault();
+        setIsCommandOpen(true);
+      }
+      if (event.key === 'Escape') {
+        setIsCommandOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, [isAuthenticated]);
 
   // --- Helper to save State ---
   const saveState = (key, data, setter) => {
@@ -1059,10 +1075,83 @@ export default function App() {
     };
   };
 
+  const getNavigationItems = () => ([
+    { id: 'dashboard', label: 'Tableau de bord', icon: TrendingUp, visible: hasPermission('viewDashboard') },
+    { id: 'chat', label: 'Messagerie', icon: MessageSquare, visible: true },
+    { id: 'feed', label: 'Fil social', icon: Users, visible: true },
+    { id: 'calendar', label: 'Agenda', icon: Calendar, visible: true },
+    { id: 'finance', label: 'Cotisations', icon: DollarSign, visible: hasPermission('viewFinances') },
+    { id: 'profile', label: 'Profil', icon: UserPlus, visible: true },
+    { id: 'gamification', label: 'Classement', icon: Award, visible: true },
+    { id: 'members', label: 'Membres', icon: UserCheck, visible: hasPermission('manageMembers') },
+    { id: 'rbac', label: 'Rôles & permissions', icon: Shield, visible: hasPermission('manageRoles') },
+    { id: 'crud', label: 'Console admin', icon: FolderOpen, visible: hasPermission('manageBackups') },
+    { id: 'security', label: 'Sécurité', icon: Lock, visible: currentUser?.role === 'Super Admin' }
+  ]).filter(item => item.visible);
+
+  const navigateTo = (tabId) => {
+    setActiveTab(tabId);
+    setIsCommandOpen(false);
+    setMobileMenuOpen(false);
+    setCommandQuery('');
+  };
+
+  const getGlobalSearchItems = () => {
+    const query = commandQuery.trim().toLowerCase();
+    const navResults = getNavigationItems().map(item => ({
+      id: `nav-${item.id}`,
+      label: item.label,
+      description: `Ouvrir ${item.label}`,
+      type: 'Navigation',
+      tab: item.id,
+      icon: item.icon
+    }));
+
+    const memberResults = members.map(member => ({
+      id: `member-${member.id}`,
+      label: member.fullName,
+      description: `${member.role} · ${member.profession || 'Membre de la communauté'}`,
+      type: 'Membre',
+      tab: hasPermission('manageMembers') ? 'members' : 'chat',
+      icon: UserCheck
+    }));
+
+    const eventResults = events.map(event => ({
+      id: `event-${event.id}`,
+      label: event.title,
+      description: `${event.date} · ${event.location}`,
+      type: 'Événement',
+      tab: 'calendar',
+      icon: Calendar,
+      event
+    }));
+
+    const postResults = posts.map(post => ({
+      id: `post-${post.id}`,
+      label: post.authorName,
+      description: post.content,
+      type: 'Publication',
+      tab: 'feed',
+      icon: FileText
+    }));
+
+    const results = [...navResults, ...memberResults, ...eventResults, ...postResults];
+    if (!query) return results.slice(0, 8);
+
+    return results
+      .filter(item => `${item.label} ${item.description} ${item.type}`.toLowerCase().includes(query))
+      .slice(0, 10);
+  };
+
+  const handleCommandSelect = (item) => {
+    if (item.event) setRsvpEvent(item.event);
+    navigateTo(item.tab);
+  };
+
   // --- Rendering UI View ---
   return (
-    <div className={theme === 'dark' ? 'dark-theme' : ''}>
-      
+    <div className={`app-container ${isAuthenticated ? 'is-authenticated' : 'is-public'} ${theme === 'dark' ? 'dark-theme' : ''}`}>
+
       {/* Toast popup */}
       {toast && (
         <div style={{
@@ -1111,224 +1200,193 @@ export default function App() {
           <img src="/logo-cohesion.jpg" alt="Logo Cohésion Fraternelle JADP Groupe" className="brand-logo" />
           <span>Cohésion Fraternelle</span>
         </div>
-        
+
         <div className="viewport-actions">
-          <span className="device-pill">
-            {viewportMode === 'mobile' ? <Smartphone size={16} /> : <Laptop size={16} />}
-            {viewportMode === 'mobile' ? 'Mobile auto' : 'Bureau auto'}
+          <span className={`backend-status-pill ${backendStatus}`}>
+            <span />
+            {backendStatus === 'online' ? 'API active' : 'Mode local'}
           </span>
-          
+          {isAuthenticated && (
+            <button
+              className="global-search-trigger"
+              onClick={() => setIsCommandOpen(true)}
+              aria-label="Ouvrir la recherche globale"
+            >
+              <Search size={16} />
+              <span>Rechercher</span>
+              <kbd>Ctrl K</kbd>
+            </button>
+          )}
           <button 
             className="btn-theme-toggle"
             onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+            aria-label="Changer de thème"
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+          {isAuthenticated && (
+            <button 
+              className="btn-primary" 
+              style={{ width: 'auto', padding: '8px 12px' }}
+              onClick={handleLogout}
+            >
+              <LogOut size={16} />
+            </button>
+          )}
         </div>
       </header>
 
-      {/* MAIN CONTAINER */}
-      <main className="main-wrapper">
-        
-        {/* VIEWPORT SIMULATOR RENDER */}
-        {viewportMode === 'mobile' ? (
-          /* MOBILE PHONE WRAPPER */
-          <div className="mobile-simulator-frame">
-            <div className="mobile-notch"><div className="notch-camera"></div></div>
-            <div className="mobile-status-bar">
-              <span>07:01</span>
-              <div className="flex gap-2 align-center">
-                <span>5G</span>
-                <span>🔋 100%</span>
+      {/* SIDEBAR (Desktop Only) */}
+      {isAuthenticated && (
+        <aside className="desktop-sidebar">
+          <div>
+            <div className="flex align-center gap-3">
+              <img src={currentUser.avatar} alt="avatar" className="activity-avatar" />
+              <div>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700 }}>{currentUser.fullName}</h4>
+                <span style={getRoleBadgeStyle(currentUser.role)}>{currentUser.role}</span>
+                <p className="sidebar-status">{currentUser.status || 'online'}</p>
               </div>
             </div>
 
-            <div className="mobile-content-container">
-              {!isAuthenticated ? (
-                /* Auth Screen in Mobile */
-                signUpMode ? renderSignUpScreen() : renderLoginScreen()
-              ) : (
-                /* Authenticated Application tabs in Mobile */
-                renderActiveTabContent()
-              )}
-            </div>
-
-            {/* Mobile Bottom Navigation (only if logged in) */}
-            {isAuthenticated && (
-              <nav className="mobile-bottom-nav">
-                {hasPermission('viewDashboard') && (
-                  <button 
-                    className={`mobile-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('dashboard')}
+            <nav className="sidebar-menu">
+              {getNavigationItems().map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`}
+                    onClick={() => navigateTo(item.id)}
                   >
-                    <TrendingUp size={20} />
-                    Accueil
+                    <Icon size={18} /> {item.label}
                   </button>
-                )}
-                <button 
-                  className={`mobile-nav-item ${activeTab === 'chat' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('chat')}
-                >
-                  <MessageSquare size={20} />
-                  Chat
-                </button>
-                <button 
-                  className={`mobile-nav-item ${activeTab === 'feed' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('feed')}
-                >
-                  <Users size={20} />
-                  Social
-                </button>
-                <button 
-                  className={`mobile-nav-item ${activeTab === 'calendar' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('calendar')}
-                >
-                  <Calendar size={20} />
-                  Agenda
-                </button>
-                <button 
-                  className={`mobile-nav-item ${activeTab === 'finance' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('finance')}
-                >
-                  <DollarSign size={20} />
-                  Dues
-                </button>
-                <button 
-                  className={`mobile-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('profile')}
-                >
-                  <UserCheck size={20} />
-                  Profil
-                </button>
-              </nav>
-            )}
-            <div className="mobile-home-indicator"></div>
+                );
+              })}
+            </nav>
           </div>
+
+          <button
+            type="button"
+            className="sidebar-link sidebar-logout"
+            onClick={handleLogout}
+          >
+            <LogOut size={18} /> Déconnexion
+          </button>
+        </aside>
+      )}
+
+      {/* MAIN CONTENT AREA */}
+      <main className="main-content">
+        {!isAuthenticated ? (
+          renderPublicPage()
         ) : (
-          /* DESKTOP SIDEBAR + BODY */
-          <div className="desktop-container">
-            {isAuthenticated && (
-              <aside className="desktop-sidebar">
-                <div>
-                  {/* Connected User Details on Sidebar Header */}
-                  <div className="flex align-center gap-3">
-                    <img src={currentUser.avatar} alt="avatar" className="activity-avatar" />
-                    <div>
-                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700 }}>{currentUser.fullName}</h4>
-                      <span style={getRoleBadgeStyle(currentUser.role)}>{currentUser.role}</span>
-                      <p className="sidebar-status">{currentUser.status || 'online'}</p>
-                    </div>
-                  </div>
-
-                  <div className="sidebar-menu">
-                    <div 
-                      className={`sidebar-link ${activeTab === 'profile' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('profile')}
-                    >
-                      <UserCheck size={18} /> Mon Profil
-                    </div>
-                    {hasPermission('viewDashboard') && (
-                      <div 
-                        className={`sidebar-link ${activeTab === 'dashboard' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('dashboard')}
-                      >
-                        <TrendingUp size={18} /> Tableau de Bord
-                      </div>
-                    )}
-                    <div 
-                      className={`sidebar-link ${activeTab === 'chat' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('chat')}
-                    >
-                      <MessageSquare size={18} /> Messagerie
-                    </div>
-                    <div 
-                      className={`sidebar-link ${activeTab === 'feed' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('feed')}
-                    >
-                      <Users size={18} /> Fil Social
-                    </div>
-                    <div 
-                      className={`sidebar-link ${activeTab === 'calendar' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('calendar')}
-                    >
-                      <Calendar size={18} /> Agenda & QR
-                    </div>
-                    {hasPermission('viewFinances') && (
-                      <div 
-                        className={`sidebar-link ${activeTab === 'finance' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('finance')}
-                      >
-                        <DollarSign size={18} /> Cotisations
-                      </div>
-                    )}
-                    <div 
-                      className={`sidebar-link ${activeTab === 'gamification' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('gamification')}
-                    >
-                      <Award size={18} /> Gamification
-                    </div>
-                    {hasPermission('manageMembers') && (
-                      <div 
-                        className={`sidebar-link ${activeTab === 'members' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('members')}
-                      >
-                        <UserCheck size={18} /> Membres
-                      </div>
-                    )}
-                    {hasPermission('manageRoles') && (
-                      <div 
-                        className={`sidebar-link ${activeTab === 'rbac' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('rbac')}
-                      >
-                        <Shield size={18} /> Rôles & Permissions
-                      </div>
-                    )}
-                    {hasPermission('manageBackups') && (
-                      <div 
-                        className={`sidebar-link ${activeTab === 'crud' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('crud')}
-                      >
-                        <FolderOpen size={18} /> Console CRUD Admin
-                      </div>
-                    )}
-                    {currentUser.role === 'Super Admin' && (
-                      <div 
-                        className={`sidebar-link ${activeTab === 'security' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('security')}
-                      >
-                        <Lock size={18} /> Logs de Sécurité
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="sidebar-footer">
-                  <div 
-                    className="sidebar-link" 
-                    onClick={handleLogout}
-                    style={{ color: '#ef4444' }}
-                  >
-                    <LogOut size={18} /> Déconnexion
-                  </div>
-                </div>
-              </aside>
-            )}
-
-            <div className="desktop-content">
-              {!isAuthenticated ? (
-                /* Auth Screen in Desktop */
-                signUpMode ? renderSignUpScreen() : renderLoginScreen()
-              ) : (
-                /* Authenticated Application Content in Desktop */
-                renderActiveTabContent()
-              )}
-            </div>
-          </div>
+          renderActiveTabContent()
         )}
-
       </main>
 
+      {/* MOBILE BOTTOM NAV */}
+      {isAuthenticated && (
+        <nav className="mobile-bottom-nav">
+          {getNavigationItems()
+            .filter(item => ['dashboard', 'chat', 'feed', 'calendar'].includes(item.id))
+            .slice(0, 4)
+            .map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={`mobile-nav-item ${activeTab === item.id ? 'active' : ''}`}
+                  onClick={() => navigateTo(item.id)}
+                >
+                  <Icon size={20} />
+                  {item.id === 'dashboard' ? 'Accueil' : item.label}
+                </button>
+              );
+            })}
+          <button
+            type="button"
+            className={`mobile-nav-item ${mobileMenuOpen ? 'active' : ''}`}
+            onClick={() => setMobileMenuOpen(prev => !prev)}
+          >
+            <Menu size={20} />
+            Plus
+          </button>
+        </nav>
+      )}
+
+      {isAuthenticated && mobileMenuOpen && (
+        <div className="mobile-more-panel">
+          {getNavigationItems()
+            .filter(item => !['dashboard', 'chat', 'feed', 'calendar'].includes(item.id))
+            .map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={`mobile-more-item ${activeTab === item.id ? 'active' : ''}`}
+                  onClick={() => navigateTo(item.id)}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          <button type="button" className="mobile-more-item danger" onClick={handleLogout}>
+            <LogOut size={18} />
+            <span>Déconnexion</span>
+          </button>
+        </div>
+      )}
+
+      {isAuthenticated && isCommandOpen && (
+        <div className="command-overlay" onMouseDown={() => setIsCommandOpen(false)}>
+          <div className="command-panel" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="command-input-row">
+              <Search size={18} />
+              <input
+                autoFocus
+                value={commandQuery}
+                onChange={(event) => setCommandQuery(event.target.value)}
+                placeholder="Rechercher une page, un membre, un événement..."
+              />
+              <button type="button" onClick={() => setIsCommandOpen(false)} aria-label="Fermer">
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <div className="command-results">
+              {getGlobalSearchItems().length > 0 ? (
+                getGlobalSearchItems().map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      type="button"
+                      key={item.id}
+                      className="command-result"
+                      onClick={() => handleCommandSelect(item)}
+                    >
+                      <span className="command-result-icon"><Icon size={17} /></span>
+                      <span>
+                        <strong>{item.label}</strong>
+                        <small>{item.description}</small>
+                      </span>
+                      <em>{item.type}</em>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="command-empty">Aucun résultat trouvé.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FLOATING SMART AI ASSISTANT PANEL */}
+
       {isAuthenticated && hasPermission('useAI') && (
         <div className="ai-assistant-wrapper">
           <div className="ai-bubble" onClick={() => setAiPanelOpen(prev => !prev)}>
@@ -1782,13 +1840,84 @@ export default function App() {
 
   // --- SUB-RENDERS ---
 
+  function renderPublicPage() {
+    const landingStats = [
+      { value: `${members.length}+`, label: 'membres suivis' },
+      { value: `${events.length}`, label: 'événements actifs' },
+      { value: `${finances.stats.balance} €`, label: 'solde transparent' }
+    ];
+
+    const scrollToAccess = () => {
+      document.getElementById('public-access')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    return (
+      <div className="public-landing">
+        <section
+          className="landing-hero"
+          style={{ backgroundImage: `linear-gradient(90deg, rgba(5, 10, 24, 0.88) 0%, rgba(5, 10, 24, 0.66) 48%, rgba(5, 10, 24, 0.2) 100%), url(${heroImage})` }}
+        >
+          <div className="landing-hero-content">
+            <span className="landing-eyebrow">
+              <Shield size={16} />
+              Communauté privée, finances claires, décisions mieux suivies
+            </span>
+            <h1>Cohésion Fraternelle</h1>
+            <p>
+              Une plateforme moderne pour réunir les membres, organiser les événements,
+              suivre les cotisations et sécuriser l'administration de votre association.
+            </p>
+            <div className="landing-actions">
+              <button type="button" className="btn-primary" onClick={scrollToAccess}>
+                <Lock size={17} /> Se connecter
+              </button>
+              <button type="button" className="btn-secondary-landing" onClick={() => { setSignUpMode(true); scrollToAccess(); }}>
+                <UserPlus size={17} /> Rejoindre
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-overview" aria-label="Points forts de Cohésion Fraternelle">
+          {landingStats.map((stat) => (
+            <div key={stat.label} className="landing-stat">
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
+            </div>
+          ))}
+        </section>
+
+        <section id="public-access" className="public-access-section">
+          <div className="public-feature-grid">
+            <div className="public-feature">
+              <MessageSquare size={20} />
+              <strong>Messagerie centralisée</strong>
+              <span>Salons, fichiers, appels simulés et échanges rapides pour chaque équipe.</span>
+            </div>
+            <div className="public-feature">
+              <DollarSign size={20} />
+              <strong>Cotisations maîtrisées</strong>
+              <span>Suivi des paiements, reçus, dépenses et caisse commune au même endroit.</span>
+            </div>
+            <div className="public-feature">
+              <Shield size={20} />
+              <strong>Administration protégée</strong>
+              <span>Rôles, permissions, journaux de sécurité et accès Super Admin principal.</span>
+            </div>
+          </div>
+
+          {signUpMode ? renderSignUpScreen() : renderLoginScreen()}
+        </section>
+      </div>
+    );
+  }
+
   function renderLoginScreen() {
     return (
-      <div className="auth-page">
-        <div className="auth-card card">
+        <div className="auth-card card public-auth-card">
           <div className="auth-header">
-            <div className="auth-logo">Cohésion Fraternelle</div>
-            <p className="auth-subtitle">Messagerie & Gestion de Communauté Solidaire</p>
+            <div className="auth-logo">Accès membre</div>
+            <p className="auth-subtitle">Connectez-vous à votre espace privé Cohésion Fraternelle.</p>
           </div>
 
           {mfaStep === 'none' ? (
@@ -1822,7 +1951,7 @@ export default function App() {
                   const demoCode = "582910";
                   setGeneratedOtp(demoCode);
                   setMfaStep('otp');
-                  showToast("Lien de récupération simulé : Code OTP envoyé par email !");
+                  showToast("Code de récupération envoyé par email.");
                 }}>Mot de passe oublié ?</span>
                 <span className="text-gold cursor-pointer" onClick={() => setSignUpMode(true)}>Créer un compte</span>
               </div>
@@ -1830,12 +1959,6 @@ export default function App() {
               <button type="submit" className="btn-primary">
                 <Lock size={16} /> Se Connecter
               </button>
-
-              <div style={{ marginTop: '16px', background: 'rgba(11,47,100,0.05)', padding: '12px', borderRadius: '12px', fontSize: '0.75rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontWeight: 'bold' }}>🔑 Identifiants Super Admin (Démo) :</span>
-                <span>Email : bokassantwali@gmail.com</span>
-                <span>Pass : 20262026</span>
-              </div>
             </form>
           ) : (
             <div>
@@ -1846,7 +1969,7 @@ export default function App() {
 
               <div className="otp-simulated-notification">
                 <Bell size={16} />
-                <span>[SIMULATION EMAIL] Code reçu : <strong>{generatedOtp}</strong></span>
+                <span>Code de sécurité : <strong>{generatedOtp}</strong></span>
               </div>
 
               <div className="otp-box">
@@ -1876,14 +1999,12 @@ export default function App() {
             </div>
           )}
         </div>
-      </div>
     );
   }
 
   function renderSignUpScreen() {
     return (
-      <div className="auth-page">
-        <div className="auth-card card" style={{ maxWidth: '560px' }}>
+        <div className="auth-card card public-auth-card public-signup-card">
           <div className="auth-header">
             <div className="auth-logo">Rejoindre Cohésion</div>
             <p className="auth-subtitle">
@@ -1901,7 +2022,7 @@ export default function App() {
               {generatedOtp && (
                 <div className="otp-simulated-notification">
                   <Bell size={16} />
-                  <span>[SIMULATION EMAIL] Code reçu : <strong>{generatedOtp}</strong></span>
+                  <span>Code de sécurité : <strong>{generatedOtp}</strong></span>
                 </div>
               )}
 
@@ -2010,7 +2131,6 @@ export default function App() {
           </form>
           )}
         </div>
-      </div>
     );
   }
 
@@ -2214,18 +2334,14 @@ export default function App() {
 
   // --- ANALYTICS DASHBOARD RENDERING ---
   function renderDashboard() {
-    const activeChatCount = chats.length;
     const activeMembersCount = members.filter(m => m.status === 'online').length;
+    const pendingCotisations = finances.cotisations.filter(item => item.status !== 'Payé');
+    const nextEvent = [...events]
+      .filter(event => new Date(`${event.date}T${event.time || '00:00'}`) >= new Date())
+      .sort((a, b) => new Date(`${a.date}T${a.time || '00:00'}`) - new Date(`${b.date}T${b.time || '00:00'}`))[0];
+    const engagementRate = members.length ? Math.round((activeMembersCount / members.length) * 100) : 0;
 
     // Charts Data
-    const monthlyAdhesions = [
-      { name: 'Janv', Membres: 15 },
-      { name: 'Févr', Membres: 25 },
-      { name: 'Mars', Membres: 40 },
-      { name: 'Avr', Membres: 55 },
-      { name: 'Mai', Membres: 72 }
-    ];
-
     const monthlyFinances = [
       { name: 'Mars', Recettes: 1500, Depenses: 800 },
       { name: 'Avr', Recettes: 3000, Depenses: 1200 },
@@ -2233,119 +2349,120 @@ export default function App() {
     ];
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div>
+      <div className="dashboard-bento">
+        <div className="dashboard-header-modern">
           <h1 className="section-title">
             Tableau de Bord
             <Sparkles className="text-gold" size={24} />
           </h1>
-          <p className="text-muted">Analyse en temps réel de votre association communautaire.</p>
+          <p className="text-muted">Vue d'ensemble de la communauté Cohésion.</p>
         </div>
 
-        {/* STATS CARDS */}
-        <div className="kpi-grid">
-          <div className="kpi-card card">
-            <div className="kpi-details">
-              <h3>Membres Actifs</h3>
-              <div className="value">{activeMembersCount} / {members.length}</div>
-            </div>
-            <div className="kpi-icon-wrapper">
-              <Users size={24} />
-            </div>
-          </div>
-          
-          <div className="kpi-card card">
-            <div className="kpi-details">
-              <h3>Solde Caisse</h3>
-              <div className="value">{finances.stats.balance} €</div>
-            </div>
-            <div className="kpi-icon-wrapper">
-              <DollarSign size={24} />
-            </div>
-          </div>
-
-          <div className="kpi-card card">
-            <div className="kpi-details">
-              <h3>Discussions Actives</h3>
-              <div className="value">{activeChatCount}</div>
-            </div>
-            <div className="kpi-icon-wrapper">
-              <MessageSquare size={24} />
-            </div>
-          </div>
-
-          <div className="kpi-card card">
-            <div className="kpi-details">
-              <h3>Mon Niveau XP</h3>
-              <div className="value">Niv. {currentUser.level}</div>
-            </div>
-            <div className="kpi-icon-wrapper">
-              <Award size={24} />
-            </div>
-          </div>
+        <div className="executive-strip">
+          <button className="insight-card" onClick={() => navigateTo('members')}>
+            <span className="insight-kicker">Engagement</span>
+            <strong>{engagementRate}% actifs</strong>
+            <small>{activeMembersCount} membres connectés maintenant</small>
+          </button>
+          <button className="insight-card warning" onClick={() => navigateTo(hasPermission('viewFinances') ? 'finance' : 'chat')}>
+            <span className="insight-kicker">Cotisations</span>
+            <strong>{pendingCotisations.length} à relancer</strong>
+            <small>{pendingCotisations.map(item => item.memberName).join(', ') || 'Tout est réglé'}</small>
+          </button>
+          <button className="insight-card" onClick={() => navigateTo('calendar')}>
+            <span className="insight-kicker">Prochain rendez-vous</span>
+            <strong>{nextEvent?.title || 'Aucun événement'}</strong>
+            <small>{nextEvent ? `${nextEvent.date} à ${nextEvent.time} · ${nextEvent.location}` : 'Ajoutez une activité communautaire'}</small>
+          </button>
         </div>
 
-        {/* ANALYTICS CHARTS */}
-        <div className="chart-section">
-          {/* Main Area Chart */}
-          <div className="chart-card card">
-            <h3 style={{ marginBottom: '16px' }}>Trésorerie Mensuelle (€)</h3>
-            <div style={{ width: '100%', height: '280px' }}>
+        <div className="bento-grid">
+          {/* Main Stat Card - Bento Big */}
+          <div className="card bento-item bento-stat-main">
+            <div className="bento-stat-info">
+              <h3>Statut Communauté</h3>
+              <div className="bento-main-value">{members.length}</div>
+              <p className="text-muted">Membres inscrits au total</p>
+            </div>
+            <div className="bento-badge-group">
+              <span className="badge online">{activeMembersCount} en ligne</span>
+              <span className="badge new">+12 ce mois</span>
+            </div>
+            <Users className="bento-bg-icon" size={120} />
+          </div>
+
+          {/* Finance Card - Bento Wide */}
+          <div className="card bento-item bento-finance">
+            <div className="flex justify-between align-center mb-4">
+              <h3>Flux Financier</h3>
+              <DollarSign className="text-gold" />
+            </div>
+            <div style={{ width: '100%', height: '180px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthlyFinances}>
                   <defs>
-                    <linearGradient id="colorRecettes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1D4ED8" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#1D4ED8" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorDepenses" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#D4AF37" stopOpacity={0}/>
+                    <linearGradient id="colorRecettesBento" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#d4af37" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#d4af37" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                  <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={12} />
-                  <YAxis stroke="var(--text-muted)" fontSize={12} />
-                  <Tooltip />
-                  <Legend />
-                  <Area type="monotone" dataKey="Recettes" stroke="#1D4ED8" fillOpacity={1} fill="url(#colorRecettes)" />
-                  <Area type="monotone" dataKey="Depenses" stroke="#D4AF37" fillOpacity={1} fill="url(#colorDepenses)" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
+                  <Area type="monotone" dataKey="Recettes" stroke="#d4af37" strokeWidth={3} fillOpacity={1} fill="url(#colorRecettesBento)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
-
-          {/* Adhesion Chart */}
-          <div className="chart-card card">
-            <h3 style={{ marginBottom: '16px' }}>Croissance Membres</h3>
-            <div style={{ width: '100%', height: '280px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyAdhesions}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                  <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={12} />
-                  <YAxis stroke="var(--text-muted)" fontSize={12} />
-                  <Tooltip />
-                  <Bar dataKey="Membres" fill="#1D4ED8" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="bento-finance-footer">
+              <div className="finance-mini-stat">
+                <span>Solde Total</span>
+                <strong>{finances.stats.balance} €</strong>
+              </div>
+              <div className="finance-mini-stat">
+                <span>Dépenses</span>
+                <strong style={{ color: '#ef4444' }}>{finances.stats.totalDepenses} €</strong>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* FEED / LATEST ACTIVITY */}
-        <div className="card">
-          <h3 style={{ marginBottom: '16px' }}>Activité Communautaire Récente</h3>
-          <div className="activity-list">
-            {posts.slice(0, 3).map((post) => (
-              <div key={post.id} className="activity-item">
-                <img src={post.authorAvatar} alt="avatar" className="activity-avatar" />
-                <div className="activity-details">
-                  <p><strong>{post.authorName}</strong> a publié une annonce dans le fil social :</p>
-                  <p className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>"{post.content.substring(0, 100)}..."</p>
-                  <div className="activity-time">Il y a quelques heures</div>
+          {/* Quick Actions - Bento Tall */}
+          <div className="card bento-item bento-actions">
+            <h3 className="mb-4">Actions Rapides</h3>
+            <div className="bento-action-list">
+              <button className="bento-btn" onClick={() => setActiveTab('chat')}>
+                <MessageSquare size={20} />
+                <span>Nouveau Message</span>
+              </button>
+              <button className="bento-btn" onClick={() => setActiveTab('feed')}>
+                <PlusCircle size={20} />
+                <span>Publier Annonce</span>
+              </button>
+              <button className="bento-btn" onClick={() => setActiveTab('calendar')}>
+                <Calendar size={20} />
+                <span>Événement</span>
+              </button>
+              <button className="bento-btn" onClick={exportDatabase}>
+                <Download size={20} />
+                <span>Backup JSON</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Recent Activity - Bento Bottom Wide */}
+          <div className="card bento-item bento-activity">
+            <h3 className="mb-4">Dernière Activité</h3>
+            <div className="bento-activity-list">
+              {posts.slice(0, 2).map((post) => (
+                <div key={post.id} className="bento-activity-item">
+                  <div className="story-ring active sm">
+                    <img src={post.authorAvatar} alt="avatar" className="activity-avatar-mini" />
+                  </div>
+                  <div className="activity-content-mini">
+                    <p><strong>{post.authorName}</strong> a posté :</p>
+                    <p className="text-muted truncate">{post.content.substring(0, 60)}...</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -2355,44 +2472,40 @@ export default function App() {
   // --- MESSAGERIE TEMP RÉEL RENDERING ---
   function renderChat() {
     const activeChat = chats.find(c => c.id === activeChatId) || chats[0];
-    
-    // Auto populate search
     const filteredChats = filterBySearch(chats, 'name');
 
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <h1 className="section-title">
-          Messagerie Directe & Canaux
-          <MessageSquare className="text-gold" size={24} />
-        </h1>
-
-        <div className="chat-layout">
+      <div className="chat-container-modern">
+        <div className="chat-layout-modern">
           {/* Chat Side Menu */}
-          <div className="chat-sidebar">
-            <div className="chat-search">
-              <input 
-                type="text" 
-                placeholder="Rechercher salon..." 
-                className="form-control"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+          <div className="chat-sidebar-modern">
+            <div className="chat-sidebar-header">
+              <h2 className="chat-title">Discussions</h2>
+              <div className="chat-search-modern">
+                <input
+                  type="text"
+                  placeholder="Rechercher..."
+                  className="chat-search-input"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
-            
-            <div className="chat-list">
+
+            <div className="chat-list-modern">
               {filteredChats.map((chat) => (
-                <div 
-                  key={chat.id} 
-                  className={`chat-item ${chat.id === activeChatId ? 'active' : ''}`}
+                <div
+                  key={chat.id}
+                  className={`chat-item-modern ${chat.id === activeChatId ? 'active' : ''}`}
                   onClick={() => { setActiveChatId(chat.id); setSearchQuery(''); }}
                 >
-                  <div className="chat-avatar-wrapper">
-                    <img src={chat.avatar} alt="avatar" className="activity-avatar" style={{ width: '40px', height: '40px' }} />
-                    {!chat.isGroup && <div className="chat-online-badge"></div>}
+                  <div className="chat-avatar-container">
+                    <img src={chat.avatar} alt="avatar" className="chat-list-avatar" />
+                    {!chat.isGroup && <div className="online-indicator"></div>}
                   </div>
-                  
-                  <div className="chat-item-details">
-                    <div className="chat-item-header">
+
+                  <div className="chat-item-body">
+                    <div className="chat-item-top">
                       <span className="chat-item-name">{chat.name}</span>
                       <span className="chat-item-time">12:30</span>
                     </div>
@@ -2407,119 +2520,97 @@ export default function App() {
 
           {/* Chat Messaging Window */}
           {activeChat && (
-            <div className="chat-window">
-              <div className="chat-header">
-                <div className="chat-user-info">
-                  <img src={activeChat.avatar} alt="avatar" className="activity-avatar" style={{ width: '40px', height: '40px' }} />
-                  <div>
-                    <h4 style={{ fontWeight: 'bold' }}>{activeChat.name}</h4>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            <div className="chat-window-modern">
+              <div className="chat-header-modern">
+                <div className="chat-user-header">
+                  <img src={activeChat.avatar} alt="avatar" className="chat-header-avatar" />
+                  <div className="chat-header-info">
+                    <h4 className="chat-header-name">{activeChat.name}</h4>
+                    <span className="chat-header-status">
                       {activeChat.isGroup ? `${activeChat.members.length} membres` : "En ligne"}
                     </span>
                   </div>
                 </div>
 
-                <div className="chat-actions">
-                  <button className="chat-btn" onClick={() => setActiveCall({ type: 'audio', memberName: activeChat.name, avatar: activeChat.avatar, status: 'ringing' })}>
-                    <Phone size={18} />
+                <div className="chat-header-actions">
+                  <button className="chat-icon-btn" onClick={() => setActiveCall({ type: 'audio', memberName: activeChat.name, avatar: activeChat.avatar, status: 'ringing' })}>
+                    <Phone size={20} />
                   </button>
-                  <button className="chat-btn" onClick={() => setActiveCall({ type: 'video', memberName: activeChat.name, avatar: activeChat.avatar, status: 'ringing' })}>
-                    <Video size={18} />
+                  <button className="chat-icon-btn" onClick={() => setActiveCall({ type: 'video', memberName: activeChat.name, avatar: activeChat.avatar, status: 'ringing' })}>
+                    <Video size={20} />
                   </button>
+                  <button className="chat-icon-btn"><PlusCircle size={20} /></button>
                 </div>
               </div>
 
               {/* Message List */}
-              <div className="chat-messages">
+              <div className="chat-messages-modern">
                 {activeChat.messages.map((msg) => (
                   <div 
                     key={msg.id} 
-                    className={`chat-bubble-wrapper ${msg.senderId === currentUser.id ? 'sent' : 'received'}`}
+                    className={`message-row ${msg.senderId === currentUser.id ? 'sent' : 'received'}`}
                   >
-                    <div className="chat-msg-bubble">
-                      <div style={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'rgb(var(--accent-rgb))', marginBottom: '4px' }}>
-                        {msg.senderName}
-                      </div>
-                      
-                      <div>{msg.content}</div>
+                    <div className="message-bubble-modern">
+                      {activeChat.isGroup && msg.senderId !== currentUser.id && (
+                        <div className="message-sender-name">{msg.senderName}</div>
+                      )}
 
-                      {/* Display File Attachments */}
+                      <div className="message-text">{msg.content}</div>
+
                       {msg.file && (
-                        <div style={{
-                          background: 'rgba(255,255,255,0.1)',
-                          border: '1.5px solid var(--border-color)',
-                          borderRadius: '8px',
-                          padding: '10px',
-                          marginTop: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}>
-                          <FileText size={20} className="text-gold" />
-                          <div>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{msg.file.name}</div>
-                            <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>{msg.file.size}</span>
+                        <div className="message-file-attachment">
+                          <FileText size={20} />
+                          <div className="file-info">
+                            <div className="file-name">{msg.file.name}</div>
+                            <span className="file-size">{msg.file.size}</span>
                           </div>
                         </div>
                       )}
 
-                      <div className="chat-bubble-meta">
+                      <div className="message-meta-modern">
                         <span>12:35</span>
-                        {msg.senderId === currentUser.id && <Check size={12} />}
+                        {msg.senderId === currentUser.id && <Check size={14} className="check-icon" />}
                       </div>
                     </div>
                   </div>
                 ))}
 
                 {isTypingSimulated && (
-                  <div className="chat-bubble-wrapper received">
-                    <div className="chat-msg-bubble text-muted" style={{ padding: '8px 12px' }}>
-                      Écrit un message... 💬
+                  <div className="message-row received">
+                    <div className="message-bubble-modern typing">
+                      <span className="typing-dot"></span>
+                      <span className="typing-dot"></span>
+                      <span className="typing-dot"></span>
                     </div>
                   </div>
                 )}
-                
+
                 <div ref={chatMessagesEndRef} />
               </div>
 
               {/* Chat Input Footer */}
-              <form onSubmit={sendChatMessage} className="chat-footer">
-                
-                {/* File Attachment simulation */}
-                <div className="chat-input-wrapper">
+              <form onSubmit={sendChatMessage} className="chat-footer-modern">
+                <button type="button" className="chat-input-btn"><Plus size={24} /></button>
+
+                <div className="chat-input-container">
                   {selectedChatFile && (
-                    <div className="chat-file-preview">
+                    <div className="chat-file-chip">
                       <span>📎 {selectedChatFile.name}</span>
-                      <button type="button" onClick={() => setSelectedChatFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
-                        <XCircle size={14} />
-                      </button>
+                      <button type="button" onClick={() => setSelectedChatFile(null)}><XCircle size={14} /></button>
                     </div>
                   )}
-                  
+
                   <input 
                     type="text" 
-                    placeholder="Écrivez votre message..." 
-                    className="form-control"
+                    placeholder="Message..." 
+                    className="chat-text-input"
                     value={chatInputText}
                     onChange={(e) => setChatInputText(e.target.value)}
                   />
                 </div>
 
-                {/* Simulated File upload icon */}
-                <label style={{ cursor: 'pointer' }} className="chat-btn">
-                  <Share2 size={18} />
-                  <input 
-                    type="file" 
-                    style={{ display: 'none' }} 
-                    onChange={(e) => {
-                      setSelectedChatFile(e.target.files[0]);
-                      showToast("Document prêt à être partagé dans le chat !");
-                    }} 
-                  />
-                </label>
-
-                <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '12px' }}>
-                  <Send size={16} />
+                <button type="submit" className="chat-send-btn">
+                  <Send size={20} />
                 </button>
               </form>
             </div>
@@ -2528,198 +2619,186 @@ export default function App() {
       </div>
     );
   }
-
   // --- SOCIAL FEED & STORIES RENDERING ---
   function renderFeed() {
     return (
       <div className="feed-layout">
-        <div>
+        <div className="feed-header-section">
           <h1 className="section-title">
-            Fil Communautaire & Réseau Social
+            Communauté
             <Users className="text-gold" size={24} />
           </h1>
-          <p className="text-muted">Partagez vos moments, annonces et histoires avec la communauté.</p>
+          <p className="text-muted">Partagez vos moments et histoires avec la fraternité.</p>
         </div>
 
-        {/* 24H STORIES SECTION */}
-        <div className="stories-carousel">
-          {/* Create new story placeholder */}
-          <div className="story-bubble" style={{ border: '3px dashed #64748b' }} onClick={() => {
-            showToast("Stories : Veuillez sélectionner une photo pour créer une story de 24h !");
-          }}>
-            <div style={{
-              width: '100%', height: '100%', borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)'
-            }}>
-              <PlusCircle size={24} className="text-gold" />
+        {/* IG-STYLE STORIES SECTION */}
+        <div className="stories-container">
+          <div className="stories-carousel">
+            {/* Create new story placeholder */}
+            <div className="story-item" onClick={() => showToast("Veuillez sélectionner une photo pour votre story !")}>
+              <div className="story-ring empty">
+                <div className="story-avatar-wrapper">
+                  <PlusCircle size={24} className="text-gold" />
+                </div>
+              </div>
+              <div className="story-label">Ma Story</div>
             </div>
-            <div className="story-label">Ma Story</div>
-          </div>
-          
-          {stories.map((story) => (
-            <div key={story.id} className="story-bubble" onClick={() => setActiveStory(story)}>
-              <img src={story.avatar} alt="author" className="story-img" />
-              <div className="story-label">{story.authorName}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* POST CREATOR BOX */}
-        {hasPermission('writePosts') && (
-          <div className="card">
-            <form onSubmit={createPost} className="post-creator">
-              <img src={currentUser.avatar} alt="avatar" className="post-avatar" />
-              
-              <div className="post-input-box">
-                <textarea 
-                  placeholder="Quoi de neuf aujourd'hui ?" 
-                  className="post-textarea"
-                  value={newPostText}
-                  onChange={(e) => setNewPostText(e.target.value)}
-                />
-
-                {selectedPostFile && (
-                  <div className="chat-file-preview">
-                    <span>🖼️ {selectedPostFile.name} (Prêt)</span>
-                    <button type="button" onClick={() => setSelectedPostFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
-                      <XCircle size={14} />
-                    </button>
+            
+            {stories.map((story) => (
+              <div key={story.id} className="story-item" onClick={() => setActiveStory(story)}>
+                <div className="story-ring active">
+                  <div className="story-avatar-wrapper">
+                    <img src={story.avatar} alt="author" className="story-img" />
                   </div>
-                )}
+                </div>
+                <div className="story-label">{story.authorName.split(' ')[0]}</div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-                <div className="post-creator-actions">
-                  <div className="post-actions-left">
-                    <label style={{ cursor: 'pointer' }} className="post-action-btn">
-                      <Camera size={18} /> Média
+        <div className="feed-main-grid">
+          <div className="feed-posts-column">
+            {/* POST CREATOR BOX */}
+            {hasPermission('writePosts') && (
+              <div className="card post-creator-card">
+                <form onSubmit={createPost} className="post-creator-form">
+                  <img src={currentUser.avatar} alt="avatar" className="post-avatar-mini" />
+                  <div className="post-input-wrapper">
+                    <textarea 
+                      placeholder="Quoi de neuf aujourd'hui ?" 
+                      className="post-textarea-modern"
+                      value={newPostText}
+                      onChange={(e) => setNewPostText(e.target.value)}
+                    />
+                    <div className="post-creator-footer">
+                      <label className="post-media-btn">
+                        <Camera size={20} />
+                        <span>Média</span>
+                        <input 
+                          type="file" accept="image/*,video/*" 
+                          style={{ display: 'none' }}
+                          onChange={(e) => setSelectedPostFile(e.target.files[0])}
+                        />
+                      </label>
+                      <button type="submit" className="btn-primary-sm">Publier</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* POSTS LIST (IG-Style) */}
+            <div className="posts-list-modern">
+              {posts.map((post) => (
+                <div key={post.id} className="card post-card-modern">
+                  <div className="post-header-modern">
+                    <div className="post-author-modern">
+                      <div className="story-ring active sm">
+                        <img src={post.authorAvatar} alt="avatar" className="post-avatar-sm" />
+                      </div>
+                      <div className="post-meta-modern">
+                        <span className="post-author-name">{post.authorName}</span>
+                        <span className="post-time-meta">Il y a quelques heures</span>
+                      </div>
+                    </div>
+                    <button className="post-more-btn"><Share2 size={18} /></button>
+                  </div>
+
+                  {post.media && (
+                    <div className="post-media-modern">
+                      <img src={post.media} alt="media" onDoubleClick={() => handleLikePost(post.id)} />
+                    </div>
+                  )}
+
+                  <div className="post-content-modern">
+                    {post.content && (
+                      <div className="post-text-content">
+                        <strong>{post.authorName}</strong> {post.content}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="post-actions-modern">
+                    <div className="actions-left">
+                      <button 
+                        className={`action-btn-modern ${post.likes.includes(currentUser.id) ? 'liked' : ''}`}
+                        onClick={() => handleLikePost(post.id)}
+                      >
+                        <Heart size={24} fill={post.likes.includes(currentUser.id) ? '#ef4444' : 'none'} stroke={post.likes.includes(currentUser.id) ? '#ef4444' : 'currentColor'} />
+                      </button>
+                      <button className="action-btn-modern"><MessageSquare size={24} /></button>
+                      <button className="action-btn-modern"><Send size={24} /></button>
+                    </div>
+                    <span className="likes-count-modern">{post.likes.length} J'aime</span>
+                  </div>
+
+                  {/* COMMENTS SECTION */}
+                  <div className="post-comments-section" style={{ padding: '0 16px 16px 16px' }}>
+                    {post.comments.length > 0 && (
+                      <div className="comments-list" style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
+                        {post.comments.map((comm) => (
+                          <div key={comm.id} className="comment-item" style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <img src={comm.authorAvatar} alt="avatar" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />
+                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '12px', flex: 1 }}>
+                              <span style={{ fontWeight: 'bold', fontSize: '12px', display: 'block' }}>{comm.authorName}</span>
+                              <p style={{ marginTop: '2px', fontSize: '13px', margin: 0 }}>{comm.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Comment Form */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                       <input 
-                        type="file" accept="image/*,video/*" 
-                        style={{ display: 'none' }}
-                        onChange={(e) => setSelectedPostFile(e.target.files[0])}
+                        type="text" 
+                        placeholder="Écrire un commentaire..." 
+                        style={{ 
+                          flex: 1, 
+                          background: 'rgba(255,255,255,0.05)', 
+                          border: '1px solid rgba(255,255,255,0.1)', 
+                          borderRadius: '20px', 
+                          padding: '8px 16px', 
+                          color: 'white',
+                          fontSize: '13px'
+                        }}
+                        value={newCommentTexts[post.id] || ''}
+                        onChange={(e) => setNewCommentTexts({ ...newCommentTexts, [post.id]: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddComment(post.id)}
                       />
-                    </label>
-                    
-                    <select 
-                      className="form-control" 
-                      style={{ width: '130px', padding: '4px 8px', fontSize: '0.8rem' }}
-                      value={newPostCategory}
-                      onChange={(e) => setNewPostCategory(e.target.value)}
-                    >
-                      <option value="Annonce">Annonce</option>
-                      <option value="Activité">Activité</option>
-                      <option value="Projet">Projet</option>
-                    </select>
+                      <button 
+                        className="btn-primary" 
+                        style={{ width: 'auto', padding: '8px 12px', borderRadius: '20px' }}
+                        onClick={() => handleAddComment(post.id)}
+                      >
+                        <Send size={14} />
+                      </button>
+                    </div>
                   </div>
-
-                  <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 24px' }}>
-                    Publier
-                  </button>
                 </div>
-              </div>
-            </form>
+              ))}
+            </div>
           </div>
-        )}
 
-        {/* POSTS LIST */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {posts.map((post) => (
-            <div key={post.id} className="card post-card">
-              <div className="post-header">
-                <div className="post-author-info">
-                  <img src={post.authorAvatar} alt="avatar" className="post-avatar" />
-                  <div>
-                    <div className="flex align-center gap-2">
-                      <span className="post-author-name">{post.authorName}</span>
-                      <span className="post-badge">{post.authorRole}</span>
+          {/* SIDEBAR WIDGETS (Suggessions) */}
+          <div className="feed-sidebar-widgets">
+            <div className="card suggestion-card">
+              <h4 className="widget-title">Suggestions</h4>
+              <div className="suggestion-list">
+                {members.slice(0, 4).map(m => (
+                  <div key={m.id} className="suggestion-item">
+                    <img src={m.avatar} alt="avatar" className="suggestion-avatar" />
+                    <div className="suggestion-info">
+                      <span className="suggestion-name">{m.fullName}</span>
+                      <span className="suggestion-reason">Nouveau membre</span>
                     </div>
-                    <span className="post-time">Publié il y a quelques heures</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="post-content">
-                {post.content}
-              </div>
-
-              {post.media && (
-                <div className="post-media-container">
-                  <img src={post.media} alt="media" />
-                </div>
-              )}
-
-              {post.file && (
-                <div style={{
-                  background: 'rgba(11, 47, 100, 0.05)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <div className="flex align-center gap-2">
-                    <FileText className="text-gold" />
-                    <strong>{post.file.name}</strong>
-                  </div>
-                  <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => showToast("Fichier téléchargé avec succès !")}>
-                    Télécharger
-                  </button>
-                </div>
-              )}
-
-              <div className="post-footer">
-                <button 
-                  className={`post-footer-btn ${post.likes.includes(currentUser.id) ? 'active' : ''}`}
-                  onClick={() => handleLikePost(post.id)}
-                >
-                  <Heart size={16} fill={post.likes.includes(currentUser.id) ? '#dc2626' : 'none'} />
-                  {post.likes.length} J'aime
-                </button>
-                
-                <button className="post-footer-btn">
-                  <MessageSquare size={16} />
-                  {post.comments.length} Commentaires
-                </button>
-
-                {hasPermission('moderateContent') && (
-                  <button className="post-footer-btn" style={{ color: '#ef4444', marginLeft: 'auto' }} onClick={() => handleDeleteCrud(post.id)}>
-                    <AlertTriangle size={16} /> Modérer / Supprimer
-                  </button>
-                )}
-              </div>
-
-              {/* COMMENTS SECTION */}
-              <div className="comments-section">
-                {post.comments.map((comm) => (
-                  <div key={comm.id} className="comment-item">
-                    <img src={comm.authorAvatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"} alt="avatar" className="activity-avatar" style={{ width: '28px', height: '28px' }} />
-                    <div className="comment-bubble">
-                      <strong>{comm.authorName}</strong>
-                      <p style={{ marginTop: '4px' }}>{comm.content}</p>
-                    </div>
+                    <button className="follow-btn">Suivre</button>
                   </div>
                 ))}
-
-                {/* Comment Form */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <input 
-                    type="text" 
-                    placeholder="Écrire un commentaire..." 
-                    className="form-control"
-                    value={newCommentTexts[post.id] || ''}
-                    onChange={(e) => setNewCommentTexts({ ...newCommentTexts, [post.id]: e.target.value })}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddComment(post.id)}
-                  />
-                  <button 
-                    className="btn-primary" 
-                    style={{ width: 'auto', padding: '10px' }}
-                    onClick={() => handleAddComment(post.id)}
-                  >
-                    <Send size={14} />
-                  </button>
-                </div>
               </div>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     );

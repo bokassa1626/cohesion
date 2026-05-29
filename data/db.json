@@ -142,6 +142,11 @@
       "emailVerified": true,
       "failedLoginCount": 0,
       "activeSessions": [
+        "d2f37335-1154-4a58-b9e5-e0fc9729c436",
+        "a2f936da-916b-4415-9a56-3fcfd8a2965b",
+        "ab693a28-6969-40b9-813a-7e0aad079ebd",
+        "02af34c8-2f25-4ccb-8658-78ad39c3df65",
+        "3b3d7fdb-d4f0-471b-9da0-50f9d1f7ca37",
         "1ec63466-5494-40a6-be09-9833f2ce3834",
         "23325814-5233-44dc-a9f3-f17614f3ebb1"
       ],
@@ -471,39 +476,23 @@
   ],
   "posts": [
     {
-      "id": "p1",
-      "authorId": "m1",
-      "authorName": "Bokassa Ntwali",
-      "authorAvatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-      "authorRole": "Super Admin",
-      "content": "Chers membres de la Cohésion Fraternelle, je suis fier de vous présenter notre nouvelle charte associative. Ensemble, nous bâtissons un réseau solidaire et prospère. Jetez un œil aux nouveaux statuts officiels en pièce jointe.",
-      "media": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=800",
+      "id": "p2",
+      "authorId": "m4",
+      "authorName": "Sarah Koné",
+      "authorAvatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150",
+      "authorRole": "Responsable Événementiel",
+      "content": "Ne manquez pas notre Grand Gala de Solidarité qui aura lieu le 10 Juin prochain à l'hôtel Serena ! Un calendrier interactif est disponible pour réserver vos places directement. Récupérez votre QR Code d'invitation après inscription.",
+      "media": "https://images.unsplash.com/photo-1511578314322-379afb476865?w=800",
       "file": {
         "name": "Charte_Association_Cohesion.pdf",
         "type": "application/pdf"
       },
       "likes": [
-        "m2",
-        "m3",
-        "m4"
+        "m2"
       ],
-      "comments": [
-        {
-          "id": "c1",
-          "authorName": "Aminata Diallo",
-          "authorAvatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-          "content": "Un document d'une importance capitale ! Bravo pour la rédaction rigoureuse.",
-          "timestamp": "2026-05-28T02:00:00Z"
-        },
-        {
-          "id": "c2",
-          "authorName": "Marc Dubois",
-          "authorAvatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-          "content": "Signé et approuvé !",
-          "timestamp": "2026-05-28T03:15:00Z"
-        }
-      ],
-      "timestamp": "2026-05-28T01:30:00Z"
+      "comments": [],
+      "timestamp": "2026-05-28T04:00:00Z",
+      "updatedAt": "2026-05-28T10:53:34.548Z"
     },
     {
       "id": "p2",
@@ -688,6 +677,60 @@
   "notifications": [],
   "activityLogs": [
     {
+      "id": "log-1780056408335",
+      "type": "SUCCESS_LOGIN",
+      "email": "bokassantwali@gmail.com",
+      "details": "Connexion réussie (Super Admin).",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.22621.6133",
+      "timestamp": "2026-05-29T12:06:48.335Z"
+    },
+    {
+      "id": "log-1779965535334",
+      "type": "SUCCESS_LOGIN",
+      "email": "bokassantwali@gmail.com",
+      "details": "Connexion réussie (Super Admin).",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "timestamp": "2026-05-28T10:52:15.334Z"
+    },
+    {
+      "id": "log-1779965531162",
+      "type": "SUCCESS_LOGIN",
+      "email": "bokassantwali@gmail.com",
+      "details": "Connexion réussie (Super Admin).",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "timestamp": "2026-05-28T10:52:11.162Z"
+    },
+    {
+      "id": "log-1779963366490",
+      "type": "SUCCESS_LOGIN",
+      "email": "bokassantwali@gmail.com",
+      "details": "Connexion réussie (Super Admin).",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "timestamp": "2026-05-28T10:16:06.490Z"
+    },
+    {
+      "id": "log-1779962782573",
+      "type": "USER_LOGOUT",
+      "email": "bokassantwali@gmail.com",
+      "details": "Déconnexion utilisateur.",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "timestamp": "2026-05-28T10:06:22.573Z"
+    },
+    {
+      "id": "log-1779962760557",
+      "type": "SUCCESS_LOGIN",
+      "email": "bokassantwali@gmail.com",
+      "details": "Connexion réussie (Super Admin).",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "timestamp": "2026-05-28T10:06:00.557Z"
+    },
+    {
       "id": "log-1779960149370",
       "type": "PROFILE_UPDATED",
       "email": "bokassantwali1@gmail.com",
@@ -815,6 +858,51 @@
     }
   ],
   "sessions": [
+    {
+      "id": "d2f37335-1154-4a58-b9e5-e0fc9729c436",
+      "userId": "m1",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.22621.6133",
+      "active": true,
+      "createdAt": "2026-05-29T12:06:48.335Z",
+      "lastSeenAt": "2026-05-29T12:06:48.335Z"
+    },
+    {
+      "id": "a2f936da-916b-4415-9a56-3fcfd8a2965b",
+      "userId": "m1",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "active": true,
+      "createdAt": "2026-05-28T10:52:15.333Z",
+      "lastSeenAt": "2026-05-28T10:52:15.334Z"
+    },
+    {
+      "id": "ab693a28-6969-40b9-813a-7e0aad079ebd",
+      "userId": "m1",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "active": true,
+      "createdAt": "2026-05-28T10:52:11.162Z",
+      "lastSeenAt": "2026-05-28T10:52:11.162Z"
+    },
+    {
+      "id": "02af34c8-2f25-4ccb-8658-78ad39c3df65",
+      "userId": "m1",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "active": true,
+      "createdAt": "2026-05-28T10:16:06.490Z",
+      "lastSeenAt": "2026-05-28T10:16:06.490Z"
+    },
+    {
+      "id": "3b3d7fdb-d4f0-471b-9da0-50f9d1f7ca37",
+      "userId": "m1",
+      "ip": "::ffff:127.0.0.1",
+      "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "active": false,
+      "createdAt": "2026-05-28T10:06:00.557Z",
+      "lastSeenAt": "2026-05-28T10:06:00.557Z"
+    },
     {
       "id": "1d1b4009-e919-4090-ada7-163b27d684d6",
       "userId": "m-1779960035795",

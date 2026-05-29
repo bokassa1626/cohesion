@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'cohesion_token';
 
 export function getAuthToken() {
@@ -23,7 +23,7 @@ async function request(path, options = {}) {
       },
     });
   } catch {
-    throw new Error("Connexion au serveur impossible. Vérifiez que l'API est lancée sur le port 4000.");
+    throw new Error("Connexion au serveur impossible. Lancez l'API avec npm.cmd run dev:api, puis rechargez la page.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
