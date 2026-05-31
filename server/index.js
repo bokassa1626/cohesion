@@ -68,3 +68,5 @@ server.listen(config.port, () => {
   console.log(`Cohésion fraternelle API: http://127.0.0.1:${config.port}`);
   console.log(`Swagger: http://127.0.0.1:${config.port}/api/docs`);
 });
+
+export { app, server, io };
