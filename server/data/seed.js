@@ -8,6 +8,8 @@ import {
   INITIAL_STORIES,
   INITIAL_EVENTS,
   INITIAL_FINANCES,
+  INITIAL_GALLERY,
+  INITIAL_SITE_SETTINGS,
   SECURITY_LOGS,
 } from '../../src/mockData.js';
 import { config } from '../config.js';
@@ -41,8 +43,10 @@ export async function createSeedData() {
     chats: INITIAL_CHATS,
     posts: INITIAL_POSTS,
     stories: INITIAL_STORIES,
+    gallery: INITIAL_GALLERY,
     events: INITIAL_EVENTS,
     finances: INITIAL_FINANCES,
+    settings: INITIAL_SITE_SETTINGS,
     documents: [],
     announcements: [],
     categories: [

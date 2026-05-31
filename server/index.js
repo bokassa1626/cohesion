@@ -60,7 +60,9 @@ app.use((err, req, res, next) => {
   return res.status(500).json({ message: 'Erreur serveur.', detail: config.env === 'production' ? undefined : err.message });
 });
 
-await readDb();
+readDb().catch((error) => {
+  console.error('Initialisation de la base JSON impossible:', error);
+});
 
 server.listen(config.port, () => {
   console.log(`Cohésion fraternelle API: http://127.0.0.1:${config.port}`);

@@ -2,14 +2,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const defaultClientOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173'];
+const configuredClientOrigins = (process.env.CLIENT_ORIGINS || process.env.CLIENT_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 export const config = {
   env: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 4000),
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://127.0.0.1:5173',
-  clientOrigins: (process.env.CLIENT_ORIGINS || process.env.CLIENT_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  clientOrigins: [...new Set([...defaultClientOrigins, ...configuredClientOrigins])],
   jwtSecret: process.env.JWT_SECRET || 'change-this-secret-before-production',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '2h',
   encryptionKey: process.env.DATA_ENCRYPTION_KEY || 'change-this-32-byte-key-in-prod!!',

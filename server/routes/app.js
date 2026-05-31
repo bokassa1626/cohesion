@@ -11,6 +11,7 @@ const resources = {
   members: { key: 'members', permission: 'manageMembers' },
   posts: { key: 'posts', permission: 'writePosts' },
   announcements: { key: 'announcements', permission: 'writePosts' },
+  gallery: { key: 'gallery', permission: 'moderateContent' },
   events: { key: 'events', permission: 'manageEvents' },
   documents: { key: 'documents', permission: 'writePosts' },
   messages: { key: 'chats', permission: 'moderateContent' },
@@ -28,8 +29,10 @@ function sanitizeDb(db) {
     chats: db.chats,
     posts: db.posts,
     stories: db.stories,
+    gallery: db.gallery || [],
     events: db.events,
     finances: db.finances,
+    settings: db.settings || null,
     documents: db.documents,
     announcements: db.announcements,
     categories: db.categories,
@@ -66,6 +69,29 @@ appRouter.use(authenticate);
 appRouter.get('/bootstrap', async (req, res) => {
   const db = await readDb();
   res.json(sanitizeDb(db));
+});
+
+appRouter.put('/settings', requirePermission('moderateContent'), async (req, res) => {
+  const settings = await updateDb((db) => {
+    db.settings = {
+      ...(db.settings || {}),
+      ...req.body,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user.id,
+    };
+    db.activityLogs.unshift({
+      id: `log-${Date.now()}`,
+      type: 'SETTINGS_UPDATED',
+      email: req.user.email,
+      details: 'Paramètres du site mis à jour.',
+      ip: req.ip,
+      device: req.headers['user-agent'] || 'Unknown device',
+      timestamp: new Date().toISOString(),
+    });
+    return db.settings;
+  });
+  emitRealtime('settings:updated', { settings });
+  res.json({ settings });
 });
 
 appRouter.get('/dashboard', requirePermission('viewDashboard'), async (req, res) => {

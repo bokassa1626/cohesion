@@ -67,6 +67,10 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(data),
   }),
+  updateSettings: (data) => request('/settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
   sendMessage: (chatId, data) => request(`/chat/${chatId}/messages`, {
     method: 'POST',
     body: JSON.stringify(data),

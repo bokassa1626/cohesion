@@ -415,6 +415,68 @@ export const INITIAL_FINANCES = {
   ]
 };
 
+export const INITIAL_GALLERY = [
+  {
+    id: "g1",
+    title: "Réunion de coordination",
+    description: "Moment de travail autour des projets sociaux et de la caisse commune.",
+    image: "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1200",
+    authorId: "m1",
+    authorName: "Bokassa Ntwali",
+    timestamp: "2026-05-27T15:30:00Z",
+    likes: ["m2", "m3"],
+    favorites: ["m4"],
+    comments: [
+      {
+        id: "gc1",
+        authorName: "Aminata Diallo",
+        authorAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        content: "Très beau souvenir, merci pour le partage.",
+        timestamp: "2026-05-27T16:00:00Z"
+      }
+    ]
+  },
+  {
+    id: "g2",
+    title: "Gala de solidarité",
+    description: "Une soirée pour célébrer la fraternité et soutenir les actions communautaires.",
+    image: "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1200",
+    authorId: "m4",
+    authorName: "Sarah Koné",
+    timestamp: "2026-05-28T18:15:00Z",
+    likes: ["m1", "m2", "m3"],
+    favorites: ["m1"],
+    comments: []
+  },
+  {
+    id: "g3",
+    title: "Action communautaire",
+    description: "Préparation des dons et fournitures pour notre prochain projet de terrain.",
+    image: "https://images.unsplash.com/photo-1593113598332-cd288d649433?w=1200",
+    authorId: "m2",
+    authorName: "Aminata Diallo",
+    timestamp: "2026-05-29T09:45:00Z",
+    likes: ["m1"],
+    favorites: [],
+    comments: []
+  }
+];
+
+export const INITIAL_SITE_SETTINGS = {
+  siteName: "Cohésion Fraternelle",
+  groupName: "Cohésion Fraternelle JADP Groupe",
+  motto: "Unité, solidarité et responsabilité partagée.",
+  about: "Notre groupe rassemble les membres autour de l'entraide, de la transparence, des cotisations suivies, des événements et des projets sociaux.",
+  mission: "Renforcer la fraternité, soutenir les membres et organiser des actions communautaires utiles.",
+  values: "Solidarité, respect, transparence, engagement, confiance",
+  contactEmail: "contact@cohesion-fraternelle.org",
+  contactPhone: "+243 995 697 553",
+  location: "Kinshasa, République Démocratique du Congo",
+  allowPublicSignup: true,
+  allowGalleryDownload: true,
+  aiWelcome: "Posez-moi vos questions sur l'histoire, les valeurs, les cotisations, les événements et les règles du groupe."
+};
+
 export const SECURITY_LOGS = [
   { id: "log1", type: "SUCCESS_LOGIN", email: "bokassantwali@gmail.com", details: "Connexion réussie Super Admin", ip: "197.242.12.89", device: "Chrome / Windows 11", timestamp: "2026-05-28T05:59:00Z" },
   { id: "log2", type: "MFA_VERIFIED", email: "bokassantwali@gmail.com", details: "Validation double facteur réussie", ip: "197.242.12.89", device: "Chrome / Windows 11", timestamp: "2026-05-28T05:59:30Z" },

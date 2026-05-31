@@ -22,6 +22,7 @@ import {
   Lock,
   UserPlus,
   Camera,
+  Image as ImageIcon,
   CheckCircle,
   XCircle,
   Download,
@@ -34,7 +35,14 @@ import {
   FolderOpen,
   UserCheck,
   Check,
-  RefreshCw
+  RefreshCw,
+  Star,
+  Edit3,
+  Trash2,
+  Settings,
+  Upload,
+  Paperclip,
+  Bookmark
 } from 'lucide-react';
 import {
   AreaChart,
@@ -50,8 +58,10 @@ import {
   INITIAL_CHATS,
   INITIAL_POSTS,
   INITIAL_STORIES,
+  INITIAL_GALLERY,
   INITIAL_EVENTS,
   INITIAL_FINANCES,
+  INITIAL_SITE_SETTINGS,
   SECURITY_LOGS
 } from './mockData';
 import { api, getAuthToken, setAuthToken } from './services/api';
@@ -96,8 +106,10 @@ export default function App() {
   const [activeChatId, setActiveChatId] = useState('c-general');
   const [posts, setPosts] = useState(INITIAL_POSTS);
   const [stories] = useState(INITIAL_STORIES);
+  const [galleryPhotos, setGalleryPhotos] = useState(INITIAL_GALLERY);
   const [events, setEvents] = useState(INITIAL_EVENTS);
   const [finances, setFinances] = useState(INITIAL_FINANCES);
+  const [siteSettings, setSiteSettings] = useState(INITIAL_SITE_SETTINGS);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'chat' | 'feed' | 'calendar' | 'finance' | 'gamification' | 'members' | 'rbac' | 'security' | 'crud'
 
   // --- UI Interactive States ---
@@ -105,6 +117,9 @@ export default function App() {
   const [newPostText, setNewPostText] = useState('');
   const [selectedPostFile, setSelectedPostFile] = useState(null);
   const [newCommentTexts, setNewCommentTexts] = useState({}); // postId -> comment
+  const [galleryForm, setGalleryForm] = useState({ title: '', description: '', image: '' });
+  const [galleryEditId, setGalleryEditId] = useState(null);
+  const [galleryCommentTexts, setGalleryCommentTexts] = useState({});
   const [activeStory, setActiveStory] = useState(null);
   const [storyProgress, setStoryProgress] = useState(0);
   const [activeCall, setActiveCall] = useState(null); // { type: 'audio'|'video', memberName, avatar, status: 'ringing'|'connected', selfMuted: false }
@@ -150,19 +165,23 @@ export default function App() {
     const savedMembers = localStorage.getItem('cohesion_members');
     const savedChats = localStorage.getItem('cohesion_chats');
     const savedPosts = localStorage.getItem('cohesion_posts');
+    const savedGallery = localStorage.getItem('cohesion_gallery');
     const savedEvents = localStorage.getItem('cohesion_events');
     const savedFinances = localStorage.getItem('cohesion_finances');
     const savedRoles = localStorage.getItem('cohesion_roles');
     const savedLogs = localStorage.getItem('cohesion_logs');
+    const savedSettings = localStorage.getItem('cohesion_site_settings');
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (savedMembers) setMembers(JSON.parse(savedMembers));
     if (savedChats) setChats(JSON.parse(savedChats));
     if (savedPosts) setPosts(JSON.parse(savedPosts));
+    if (savedGallery) setGalleryPhotos(JSON.parse(savedGallery));
     if (savedEvents) setEvents(JSON.parse(savedEvents));
     if (savedFinances) setFinances(JSON.parse(savedFinances));
     if (savedRoles) setRoles(JSON.parse(savedRoles));
     if (savedLogs) setSecurityLogs(JSON.parse(savedLogs));
+    if (savedSettings) setSiteSettings({ ...INITIAL_SITE_SETTINGS, ...JSON.parse(savedSettings) });
 
     api.health()
       .then(async () => {
@@ -175,10 +194,12 @@ export default function App() {
         if (data.members) setMembers(data.members);
         if (data.chats) setChats(data.chats);
         if (data.posts) setPosts(data.posts);
+        if (data.gallery) setGalleryPhotos(data.gallery);
         if (data.events) setEvents(data.events);
         if (data.finances) setFinances(data.finances);
         if (data.roles) setRoles(data.roles);
         if (data.logs) setSecurityLogs(data.logs);
+        if (data.settings) setSiteSettings({ ...INITIAL_SITE_SETTINGS, ...data.settings });
       })
       .catch(() => setBackendStatus('offline'));
   }, []);
@@ -220,15 +241,33 @@ export default function App() {
     localStorage.setItem(key, JSON.stringify(data));
   };
 
+  const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const formatFileSize = (bytes = 0) => `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+  const getAttachmentKind = (type = '') => {
+    if (type.startsWith('image/')) return 'image';
+    if (type.startsWith('video/')) return 'video';
+    if (type.startsWith('audio/')) return 'audio';
+    return 'document';
+  };
+
   const hydrateFromBackend = async () => {
     const data = await api.bootstrap();
     if (data.members) setMembers(data.members);
     if (data.chats) setChats(data.chats);
     if (data.posts) setPosts(data.posts);
+    if (data.gallery) setGalleryPhotos(data.gallery);
     if (data.events) setEvents(data.events);
     if (data.finances) setFinances(data.finances);
     if (data.roles) setRoles(data.roles);
     if (data.logs) setSecurityLogs(data.logs);
+    if (data.settings) setSiteSettings({ ...INITIAL_SITE_SETTINGS, ...data.settings });
   };
 
   const syncResource = (resource, id, data) => {
@@ -662,7 +701,170 @@ export default function App() {
     gainXp(20, "Nouveau commentaire");
   };
 
+  // --- Gallery Handlers ---
+  const canManageGallery = () => currentUser?.role === 'Super Admin' || currentUser?.role === 'Administrateur' || hasPermission('moderateContent');
+
+  const handleGalleryFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const image = await readFileAsDataUrl(file);
+    setGalleryForm(prev => ({ ...prev, image }));
+  };
+
+  const resetGalleryForm = () => {
+    setGalleryForm({ title: '', description: '', image: '' });
+    setGalleryEditId(null);
+  };
+
+  const handleSaveGalleryPhoto = (event) => {
+    event.preventDefault();
+    if (!canManageGallery()) {
+      showToast("Seuls les administrateurs peuvent gérer la galerie.", "error");
+      return;
+    }
+    if (!galleryForm.title.trim() || !galleryForm.image) {
+      showToast("Ajoutez un titre et une photo.", "error");
+      return;
+    }
+
+    if (galleryEditId) {
+      const updated = galleryPhotos.map(photo => (
+        photo.id === galleryEditId
+          ? { ...photo, ...galleryForm, updatedAt: new Date().toISOString() }
+          : photo
+      ));
+      saveState('cohesion_gallery', updated, setGalleryPhotos);
+      syncResource('gallery', galleryEditId, updated.find(photo => photo.id === galleryEditId));
+      showToast("Photo de galerie mise à jour.");
+      resetGalleryForm();
+      return;
+    }
+
+    const created = {
+      id: 'g-' + Date.now(),
+      ...galleryForm,
+      authorId: currentUser.id,
+      authorName: currentUser.fullName,
+      timestamp: new Date().toISOString(),
+      likes: [],
+      favorites: [],
+      comments: []
+    };
+    saveState('cohesion_gallery', [created, ...galleryPhotos], setGalleryPhotos);
+    if (backendStatus === 'online') api.createResource('gallery', created).catch(() => {});
+    showToast("Photo ajoutée à la galerie.");
+    resetGalleryForm();
+    gainXp(80, "Photo ajoutée");
+  };
+
+  const handleEditGalleryPhoto = (photo) => {
+    setGalleryEditId(photo.id);
+    setGalleryForm({
+      title: photo.title || '',
+      description: photo.description || '',
+      image: photo.image || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteGalleryPhoto = (photoId) => {
+    if (!canManageGallery()) return;
+    if (!window.confirm("Supprimer cette photo de la galerie ?")) return;
+    saveState('cohesion_gallery', galleryPhotos.filter(photo => photo.id !== photoId), setGalleryPhotos);
+    if (backendStatus === 'online') api.archiveResource('gallery', photoId).catch(() => {});
+    showToast("Photo supprimée.");
+  };
+
+  const handleToggleGalleryLike = (photoId) => {
+    const updated = galleryPhotos.map(photo => {
+      if (photo.id !== photoId) return photo;
+      const likes = photo.likes || [];
+      const nextLikes = likes.includes(currentUser.id)
+        ? likes.filter(id => id !== currentUser.id)
+        : [...likes, currentUser.id];
+      return { ...photo, likes: nextLikes };
+    });
+    saveState('cohesion_gallery', updated, setGalleryPhotos);
+    syncResource('gallery', photoId, updated.find(photo => photo.id === photoId));
+  };
+
+  const handleToggleGalleryFavorite = (photoId) => {
+    const updated = galleryPhotos.map(photo => {
+      if (photo.id !== photoId) return photo;
+      const favorites = photo.favorites || [];
+      const nextFavorites = favorites.includes(currentUser.id)
+        ? favorites.filter(id => id !== currentUser.id)
+        : [...favorites, currentUser.id];
+      return { ...photo, favorites: nextFavorites };
+    });
+    saveState('cohesion_gallery', updated, setGalleryPhotos);
+    syncResource('gallery', photoId, updated.find(photo => photo.id === photoId));
+  };
+
+  const handleAddGalleryComment = (photoId) => {
+    const text = galleryCommentTexts[photoId];
+    if (!text?.trim()) return;
+
+    const updated = galleryPhotos.map(photo => {
+      if (photo.id !== photoId) return photo;
+      const nextComment = {
+        id: 'gc-' + Date.now(),
+        authorName: currentUser.fullName,
+        authorAvatar: currentUser.avatar,
+        content: text,
+        timestamp: new Date().toISOString()
+      };
+      return { ...photo, comments: [...(photo.comments || []), nextComment] };
+    });
+    saveState('cohesion_gallery', updated, setGalleryPhotos);
+    syncResource('gallery', photoId, updated.find(photo => photo.id === photoId));
+    setGalleryCommentTexts(prev => ({ ...prev, [photoId]: '' }));
+    gainXp(15, "Commentaire galerie");
+  };
+
+  const handleShareGalleryPhoto = async (photo) => {
+    const shareText = `${photo.title} - ${siteSettings.groupName}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: photo.title, text: shareText });
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        showToast("Texte de partage copié.");
+      }
+    } catch {
+      showToast("Partage annulé.", "gold");
+    }
+  };
+
+  const handleDownloadGalleryPhoto = (photo) => {
+    if (!siteSettings.allowGalleryDownload) {
+      showToast("Le téléchargement est désactivé par l'administration.", "error");
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = photo.image;
+    link.download = `${photo.title || 'photo-cohesion'}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   // --- Real-time Chat Handlers ---
+  const handleChatFileSelect = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const url = await readFileAsDataUrl(file);
+    setSelectedChatFile({
+      name: file.name,
+      type: file.type || 'application/octet-stream',
+      size: file.size,
+      sizeLabel: formatFileSize(file.size),
+      url,
+      kind: getAttachmentKind(file.type)
+    });
+    event.target.value = '';
+  };
+
   const sendChatMessage = (e) => {
     e.preventDefault();
     if (!chatInputText.trim() && !selectedChatFile) return;
@@ -679,7 +881,9 @@ export default function App() {
       file: selectedChatFile ? {
         name: selectedChatFile.name,
         type: selectedChatFile.type,
-        size: `${Math.round(selectedChatFile.size / 1024)} KB`
+        size: selectedChatFile.sizeLabel || formatFileSize(selectedChatFile.size),
+        url: selectedChatFile.url,
+        kind: selectedChatFile.kind || getAttachmentKind(selectedChatFile.type)
       } : null
     };
 
@@ -697,7 +901,9 @@ export default function App() {
         file: selectedChatFile ? {
           name: selectedChatFile.name,
           type: selectedChatFile.type,
-          size: `${Math.round(selectedChatFile.size / 1024)} KB`
+          size: selectedChatFile.sizeLabel || formatFileSize(selectedChatFile.size),
+          url: selectedChatFile.url,
+          kind: selectedChatFile.kind || getAttachmentKind(selectedChatFile.type)
         } : null
       }).catch(() => {});
     }
@@ -841,14 +1047,18 @@ export default function App() {
       let botResponse = "Je n'ai pas bien compris votre requête. Pouvez-vous reformuler ?";
       const textLower = userText.toLowerCase();
 
-      if (textLower.includes("qui sommes") || textLower.includes("connaitre") || textLower.includes("connaître") || textLower.includes("cohésion") || textLower.includes("fraternelle")) {
-        botResponse = "**Cohésion Fraternelle JADP Groupe** est une plateforme communautaire qui rassemble les membres autour de la solidarité, de l'entraide, de la communication, des cotisations transparentes, des événements et de la gestion responsable de l'association. Vous pouvez me demander : nos objectifs, les rôles, comment payer une cotisation, comment participer aux événements ou comment contacter l'administration.";
+      if (textLower.includes("qui sommes") || textLower.includes("connaitre") || textLower.includes("connaître") || textLower.includes("cohésion") || textLower.includes("fraternelle") || textLower.includes("groupe")) {
+        botResponse = `**${siteSettings.groupName}** : ${siteSettings.about} Notre devise : "${siteSettings.motto}". Vous pouvez me demander nos objectifs, les rôles, les cotisations, les événements, la galerie ou comment contacter l'administration.`;
       } else if (textLower.includes("objectif") || textLower.includes("mission") || textLower.includes("valeur")) {
-        botResponse = "**Notre mission** : renforcer l'unité, la fraternité et l'action collective. Les valeurs principales sont la solidarité, le respect, la transparence, la responsabilité et la participation active de chaque membre.";
+        botResponse = `**Notre mission** : ${siteSettings.mission} Valeurs principales : ${siteSettings.values}.`;
       } else if (textLower.includes("cotisation") || textLower.includes("payer") || textLower.includes("finance")) {
         botResponse = "Les cotisations permettent de financer les projets, événements et aides communautaires. Dans l'espace Cotisations, chaque membre autorisé peut consulter son statut, payer via Mobile Money simulé ou télécharger son reçu.";
       } else if (textLower.includes("événement") || textLower.includes("evenement") || textLower.includes("agenda")) {
         botResponse = "L'espace Agenda présente les activités de la communauté. Vous pouvez vous inscrire, recevoir des rappels et utiliser un QR Code pour confirmer votre présence.";
+      } else if (textLower.includes("galerie") || textLower.includes("photo")) {
+        botResponse = "La galerie rassemble les photos importantes du groupe. Les administrateurs peuvent ajouter, modifier ou supprimer des photos; chaque membre peut aimer, commenter, partager, télécharger si autorisé et mettre en favori.";
+      } else if (textLower.includes("contact") || textLower.includes("administration")) {
+        botResponse = `Vous pouvez contacter l'administration via ${siteSettings.contactEmail}, ${siteSettings.contactPhone}, ou vous rapprocher du bureau à ${siteSettings.location}.`;
       } else if (textLower.includes("résumer") || textLower.includes("budget")) {
         botResponse = "📊 **Résumé Automatique - Budget Orphelinat Juin 2026** :\n\n- **Recettes attendues** : 1 500 € (Cotisations des membres).\n- **Dépenses budgétisées** : 800 € (Achat de fournitures, denrées alimentaires et rénovation de l'espace).\n- **Excédent prévisionnel** : 700 € à reverser dans la caisse de secours.\n- **Statut** : En attente de signature finale par Bokassa Ntwali.";
       } else if (textLower.includes("spam")) {
@@ -904,10 +1114,12 @@ export default function App() {
       members,
       chats,
       posts,
+      gallery: galleryPhotos,
       events,
       finances,
       roles,
-      logs: securityLogs
+      logs: securityLogs,
+      settings: siteSettings
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
@@ -929,15 +1141,38 @@ export default function App() {
         if (parsed.members) saveState('cohesion_members', parsed.members, setMembers);
         if (parsed.chats) saveState('cohesion_chats', parsed.chats, setChats);
         if (parsed.posts) saveState('cohesion_posts', parsed.posts, setPosts);
+        if (parsed.gallery) saveState('cohesion_gallery', parsed.gallery, setGalleryPhotos);
         if (parsed.events) saveState('cohesion_events', parsed.events, setEvents);
         if (parsed.finances) saveState('cohesion_finances', parsed.finances, setFinances);
         if (parsed.roles) saveState('cohesion_roles', parsed.roles, setRoles);
         if (parsed.logs) saveState('cohesion_logs', parsed.logs, setSecurityLogs);
+        if (parsed.settings) saveState('cohesion_site_settings', { ...INITIAL_SITE_SETTINGS, ...parsed.settings }, setSiteSettings);
         showToast("Restauration de la base de données réussie !");
       } catch {
         showToast("Fichier JSON invalide.", "error");
       }
     };
+  };
+
+  const canManageSiteSettings = () => currentUser?.role === 'Super Admin' || currentUser?.role === 'Administrateur';
+
+  const handleSaveSiteSettings = async (event) => {
+    event.preventDefault();
+    if (!canManageSiteSettings()) {
+      showToast("Accès réservé à l'administration.", "error");
+      return;
+    }
+    saveState('cohesion_site_settings', siteSettings, setSiteSettings);
+    if (backendStatus === 'online') {
+      try {
+        const result = await api.updateSettings(siteSettings);
+        saveState('cohesion_site_settings', { ...INITIAL_SITE_SETTINGS, ...result.settings }, setSiteSettings);
+      } catch {
+        showToast("Paramètres enregistrés localement, synchronisation différée.", "gold");
+        return;
+      }
+    }
+    showToast("Paramètres du site enregistrés.");
   };
 
   // --- CRUD Operation Actions ---
@@ -1079,6 +1314,7 @@ export default function App() {
     { id: 'dashboard', label: 'Tableau de bord', icon: TrendingUp, visible: hasPermission('viewDashboard') },
     { id: 'chat', label: 'Messagerie', icon: MessageSquare, visible: true },
     { id: 'feed', label: 'Fil social', icon: Users, visible: true },
+    { id: 'gallery', label: 'Galerie', icon: ImageIcon, visible: true },
     { id: 'calendar', label: 'Agenda', icon: Calendar, visible: true },
     { id: 'finance', label: 'Cotisations', icon: DollarSign, visible: hasPermission('viewFinances') },
     { id: 'profile', label: 'Profil', icon: UserPlus, visible: true },
@@ -1086,6 +1322,7 @@ export default function App() {
     { id: 'members', label: 'Membres', icon: UserCheck, visible: hasPermission('manageMembers') },
     { id: 'rbac', label: 'Rôles & permissions', icon: Shield, visible: hasPermission('manageRoles') },
     { id: 'crud', label: 'Console admin', icon: FolderOpen, visible: hasPermission('manageBackups') },
+    { id: 'settings', label: 'Paramètres', icon: Settings, visible: canManageSiteSettings() },
     { id: 'security', label: 'Sécurité', icon: Lock, visible: currentUser?.role === 'Super Admin' }
   ]).filter(item => item.visible);
 
@@ -1198,7 +1435,7 @@ export default function App() {
       <header className="viewport-header">
         <div className="viewport-logo">
           <img src="/logo-cohesion.jpg" alt="Logo Cohésion Fraternelle JADP Groupe" className="brand-logo" />
-          <span>Cohésion Fraternelle</span>
+          <span>{siteSettings.siteName}</span>
         </div>
 
         <div className="viewport-actions">
@@ -1387,7 +1624,7 @@ export default function App() {
 
       {/* FLOATING SMART AI ASSISTANT PANEL */}
 
-      {isAuthenticated && hasPermission('useAI') && (
+      {isAuthenticated && (
         <div className="ai-assistant-wrapper">
           <div className="ai-bubble" onClick={() => setAiPanelOpen(prev => !prev)}>
             <Sparkles size={24} />
@@ -1398,7 +1635,7 @@ export default function App() {
               <div className="ai-panel-header">
                 <div className="flex align-center gap-2">
                   <Sparkles size={18} className="text-gold" />
-                  <span style={{ fontWeight: 'bold' }}>Assistant Modérateur IA</span>
+                  <span style={{ fontWeight: 'bold' }}>Assistant IA du groupe</span>
                 </div>
                 <button 
                   style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
@@ -1953,7 +2190,11 @@ export default function App() {
                   setMfaStep('otp');
                   showToast("Code de récupération envoyé par email.");
                 }}>Mot de passe oublié ?</span>
-                <span className="text-gold cursor-pointer" onClick={() => setSignUpMode(true)}>Créer un compte</span>
+                {siteSettings.allowPublicSignup ? (
+                  <span className="text-gold cursor-pointer" onClick={() => setSignUpMode(true)}>Créer un compte</span>
+                ) : (
+                  <span className="text-muted">Inscription sur invitation</span>
+                )}
               </div>
 
               <button type="submit" className="btn-primary">
@@ -2144,6 +2385,8 @@ export default function App() {
         return renderChat();
       case 'feed':
         return renderFeed();
+      case 'gallery':
+        return renderGallery();
       case 'calendar':
         return renderCalendar();
       case 'finance':
@@ -2158,6 +2401,8 @@ export default function App() {
         return renderSecurityLogs();
       case 'crud':
         return renderCrud();
+      case 'settings':
+        return renderSiteSettings();
       default:
         return renderDashboard();
     }
@@ -2559,11 +2804,24 @@ export default function App() {
 
                       {msg.file && (
                         <div className="message-file-attachment">
-                          <FileText size={20} />
-                          <div className="file-info">
-                            <div className="file-name">{msg.file.name}</div>
-                            <span className="file-size">{msg.file.size}</span>
-                          </div>
+                          {msg.file.kind === 'image' && msg.file.url ? (
+                            <img src={msg.file.url} alt={msg.file.name} className="message-media-preview" />
+                          ) : msg.file.kind === 'video' && msg.file.url ? (
+                            <video src={msg.file.url} controls className="message-media-preview" />
+                          ) : msg.file.kind === 'audio' && msg.file.url ? (
+                            <div className="message-audio-preview">
+                              <Mic size={18} />
+                              <audio src={msg.file.url} controls />
+                            </div>
+                          ) : (
+                            <>
+                              <FileText size={20} />
+                              <div className="file-info">
+                                <div className="file-name">{msg.file.name}</div>
+                                <span className="file-size">{msg.file.size}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -2590,12 +2848,19 @@ export default function App() {
 
               {/* Chat Input Footer */}
               <form onSubmit={sendChatMessage} className="chat-footer-modern">
-                <button type="button" className="chat-input-btn"><Plus size={24} /></button>
+                <label className="chat-input-btn" title="Joindre photo, document, audio ou vidéo">
+                  <Paperclip size={22} />
+                  <input
+                    type="file"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                    onChange={handleChatFileSelect}
+                  />
+                </label>
 
                 <div className="chat-input-container">
                   {selectedChatFile && (
                     <div className="chat-file-chip">
-                      <span>📎 {selectedChatFile.name}</span>
+                      <span>{selectedChatFile.kind === 'image' ? 'Photo' : selectedChatFile.kind === 'video' ? 'Vidéo' : selectedChatFile.kind === 'audio' ? 'Audio' : 'Document'} · {selectedChatFile.name}</span>
                       <button type="button" onClick={() => setSelectedChatFile(null)}><XCircle size={14} /></button>
                     </div>
                   )}
@@ -2801,6 +3066,257 @@ export default function App() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // --- MODERN GROUP GALLERY ---
+  function renderGallery() {
+    const favoriteCount = galleryPhotos.filter(photo => (photo.favorites || []).includes(currentUser.id)).length;
+    const totalLikes = galleryPhotos.reduce((sum, photo) => sum + (photo.likes?.length || 0), 0);
+
+    return (
+      <div className="gallery-page">
+        <div className="gallery-hero">
+          <div>
+            <span className="insight-kicker">Souvenirs du groupe</span>
+            <h1>Galerie Cohésion</h1>
+            <p>{siteSettings.motto}</p>
+          </div>
+          <div className="gallery-stats">
+            <div>
+              <strong>{galleryPhotos.length}</strong>
+              <span>Photos</span>
+            </div>
+            <div>
+              <strong>{totalLikes}</strong>
+              <span>J'aime</span>
+            </div>
+            <div>
+              <strong>{favoriteCount}</strong>
+              <span>Favoris</span>
+            </div>
+          </div>
+        </div>
+
+        {canManageGallery() && (
+          <form className="gallery-admin-panel" onSubmit={handleSaveGalleryPhoto}>
+            <div>
+              <h2>{galleryEditId ? 'Modifier une photo' : 'Ajouter une photo'}</h2>
+              <p className="text-muted">Les admins peuvent enrichir, corriger ou retirer les photos du groupe.</p>
+            </div>
+            <div className="gallery-admin-grid">
+              <div className="form-group">
+                <label>Titre</label>
+                <input
+                  className="form-control"
+                  value={galleryForm.title}
+                  onChange={(e) => setGalleryForm(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Ex: Rencontre mensuelle"
+                />
+              </div>
+              <div className="form-group">
+                <label>Photo</label>
+                <label className="gallery-upload-drop">
+                  <Upload size={18} />
+                  <span>{galleryForm.image ? 'Changer la photo' : 'Importer une photo'}</span>
+                  <input type="file" accept="image/*" onChange={handleGalleryFileChange} />
+                </label>
+              </div>
+              <div className="form-group gallery-description-field">
+                <label>Description</label>
+                <textarea
+                  className="form-control"
+                  rows="3"
+                  value={galleryForm.description}
+                  onChange={(e) => setGalleryForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Ajoutez le contexte de ce moment..."
+                />
+              </div>
+              {galleryForm.image && (
+                <img src={galleryForm.image} alt="Prévisualisation galerie" className="gallery-form-preview" />
+              )}
+            </div>
+            <div className="gallery-admin-actions">
+              <button type="submit" className="btn-primary">
+                <CheckCircle size={18} /> {galleryEditId ? 'Enregistrer' : 'Publier'}
+              </button>
+              {galleryEditId && (
+                <button type="button" className="btn-quiet" onClick={resetGalleryForm}>
+                  Annuler
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+
+        <div className="gallery-grid">
+          {galleryPhotos.map((photo) => {
+            const liked = (photo.likes || []).includes(currentUser.id);
+            const favorited = (photo.favorites || []).includes(currentUser.id);
+            return (
+              <article key={photo.id} className="gallery-card">
+                <div className="gallery-image-wrap">
+                  <img src={photo.image} alt={photo.title} className="gallery-image" />
+                  {favorited && (
+                    <span className="gallery-favorite-badge">
+                      <Star size={14} fill="currentColor" /> Favori
+                    </span>
+                  )}
+                </div>
+                <div className="gallery-card-body">
+                  <div className="gallery-card-title-row">
+                    <div>
+                      <h3>{photo.title}</h3>
+                      <span>Par {photo.authorName}</span>
+                    </div>
+                    {canManageGallery() && (
+                      <div className="gallery-admin-tools">
+                        <button type="button" title="Modifier" onClick={() => handleEditGalleryPhoto(photo)}>
+                          <Edit3 size={16} />
+                        </button>
+                        <button type="button" title="Supprimer" onClick={() => handleDeleteGalleryPhoto(photo.id)}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p>{photo.description}</p>
+
+                  <div className="gallery-actions">
+                    <button type="button" className={liked ? 'active' : ''} onClick={() => handleToggleGalleryLike(photo.id)} title="Aimer">
+                      <Heart size={18} fill={liked ? 'currentColor' : 'none'} /> {photo.likes?.length || 0}
+                    </button>
+                    <button type="button" className={favorited ? 'active' : ''} onClick={() => handleToggleGalleryFavorite(photo.id)} title="Mettre en favori">
+                      <Bookmark size={18} fill={favorited ? 'currentColor' : 'none'} />
+                    </button>
+                    <button type="button" onClick={() => handleShareGalleryPhoto(photo)} title="Partager">
+                      <Share2 size={18} />
+                    </button>
+                    <button type="button" onClick={() => handleDownloadGalleryPhoto(photo)} title="Télécharger">
+                      <Download size={18} />
+                    </button>
+                  </div>
+
+                  <div className="gallery-comments">
+                    {(photo.comments || []).slice(-2).map(comment => (
+                      <div key={comment.id} className="gallery-comment">
+                        <img src={comment.authorAvatar} alt="" />
+                        <div>
+                          <strong>{comment.authorName}</strong>
+                          <span>{comment.content}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="gallery-comment-form">
+                      <input
+                        value={galleryCommentTexts[photo.id] || ''}
+                        onChange={(e) => setGalleryCommentTexts(prev => ({ ...prev, [photo.id]: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddGalleryComment(photo.id)}
+                        placeholder="Commenter..."
+                      />
+                      <button type="button" onClick={() => handleAddGalleryComment(photo.id)}>
+                        <Send size={15} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function renderSiteSettings() {
+    if (!canManageSiteSettings()) {
+      return <div className="card text-center">Accès réservé à l'administration.</div>;
+    }
+
+    return (
+      <form className="settings-page" onSubmit={handleSaveSiteSettings}>
+        <div>
+          <h1 className="section-title">
+            Paramètres du site
+            <Settings className="text-gold" size={24} />
+          </h1>
+          <p className="text-muted">Ces informations alimentent l'identité du site et les réponses de l'assistant IA.</p>
+        </div>
+
+        <section className="settings-grid">
+          <div className="card settings-panel">
+            <h3>Identité</h3>
+            <div className="form-group">
+              <label>Nom du site</label>
+              <input className="form-control" value={siteSettings.siteName} onChange={(e) => setSiteSettings(prev => ({ ...prev, siteName: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>Nom officiel du groupe</label>
+              <input className="form-control" value={siteSettings.groupName} onChange={(e) => setSiteSettings(prev => ({ ...prev, groupName: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>Devise</label>
+              <input className="form-control" value={siteSettings.motto} onChange={(e) => setSiteSettings(prev => ({ ...prev, motto: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="card settings-panel">
+            <h3>Informations du groupe</h3>
+            <div className="form-group">
+              <label>Présentation</label>
+              <textarea className="form-control" rows="4" value={siteSettings.about} onChange={(e) => setSiteSettings(prev => ({ ...prev, about: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>Mission</label>
+              <textarea className="form-control" rows="3" value={siteSettings.mission} onChange={(e) => setSiteSettings(prev => ({ ...prev, mission: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>Valeurs</label>
+              <input className="form-control" value={siteSettings.values} onChange={(e) => setSiteSettings(prev => ({ ...prev, values: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="card settings-panel">
+            <h3>Contact et règles</h3>
+            <div className="form-group">
+              <label>Email de contact</label>
+              <input className="form-control" value={siteSettings.contactEmail} onChange={(e) => setSiteSettings(prev => ({ ...prev, contactEmail: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>Téléphone</label>
+              <input className="form-control" value={siteSettings.contactPhone} onChange={(e) => setSiteSettings(prev => ({ ...prev, contactPhone: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>Localisation</label>
+              <input className="form-control" value={siteSettings.location} onChange={(e) => setSiteSettings(prev => ({ ...prev, location: e.target.value }))} />
+            </div>
+            <label className="settings-toggle">
+              <input type="checkbox" checked={siteSettings.allowPublicSignup} onChange={(e) => setSiteSettings(prev => ({ ...prev, allowPublicSignup: e.target.checked }))} />
+              <span>Inscriptions publiques ouvertes</span>
+            </label>
+            <label className="settings-toggle">
+              <input type="checkbox" checked={siteSettings.allowGalleryDownload} onChange={(e) => setSiteSettings(prev => ({ ...prev, allowGalleryDownload: e.target.checked }))} />
+              <span>Téléchargement des photos autorisé</span>
+            </label>
+          </div>
+
+          <div className="card settings-panel">
+            <h3>Assistant IA</h3>
+            <div className="form-group">
+              <label>Message d'accueil</label>
+              <textarea className="form-control" rows="5" value={siteSettings.aiWelcome} onChange={(e) => setSiteSettings(prev => ({ ...prev, aiWelcome: e.target.value }))} />
+            </div>
+            <div className="settings-ai-preview">
+              <Sparkles size={18} />
+              <span>{siteSettings.aiWelcome}</span>
+            </div>
+          </div>
+        </section>
+
+        <button className="btn-primary settings-save-btn" type="submit">
+          <CheckCircle size={18} /> Enregistrer les paramètres
+        </button>
+      </form>
     );
   }
 
